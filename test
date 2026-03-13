@@ -4,7 +4,6 @@ local RunService = game:GetService("RunService")
 
 local active = false
 
--- Функция для поиска персонажа
 local function getCharacterData()
 	local char = Player.Character
 	if char then
@@ -15,7 +14,6 @@ local function getCharacterData()
 	return nil, nil, nil
 end
 
--- Переключение на Z (Я)
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end
 	
@@ -23,14 +21,13 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		active = not active
 		
 		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = "BHOP";
-			Text = active and "ВКЛЮЧЕН" or "ВЫКЛЮЧЕН";
-			Duration = 1;
+			Title = "Авто-прыжок";
+			Text = active and "НИЗКИЙ РЕЖИМ: ВКЛ" or "ВЫКЛЮЧЕНО";
+			Duration = 1.5;
 		})
 	end
 end)
 
--- Основная логика
 RunService.Heartbeat:Connect(function()
 	if not active then return end
 	
@@ -41,12 +38,11 @@ RunService.Heartbeat:Connect(function()
 		params.FilterDescendantsInstances = {char}
 		params.FilterType = Enum.RaycastFilterType.Exclude
 		
-		-- ДИСТАНЦИЯ: 3.0 — это идеальный баланс. 
-		-- Если все равно высоко, попробуй изменить на 2.9
-		local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, -3.0, 0), params)
+		-- Теперь проверяем всего на 3.5 единицы вниз (почти у самых ног)
+		local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, 3.5, 0), params)
 		
 		if raycastResult then
-			-- Даем импульс вверх. 35 — это стандартная высота.
+			-- Уменьшили силу прыжка до 35, чтобы отскок был мягким
 			root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 35, root.AssemblyLinearVelocity.Z)
 		end
 	end
