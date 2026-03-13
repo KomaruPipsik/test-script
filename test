@@ -1,0 +1,91 @@
+-- Ссылка на игрока и сервисы
+local Player = game.Players.LocalPlayer
+local RunService = game.GetService("RunService")
+local UserInputService = game.GetService("UserInputService")
+
+-- Переменные состояния
+local jumpingEnabled = false
+local lastInput = "" -- Для хранения ника
+
+-- 1. СОЗДАНИЕ GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoJumpGui"
+screenGui.Parent = Player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 150)
+mainFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+-- Поле для Ника (с сохранением текста)
+local nickInput = Instance.new("TextBox")
+nickInput.Size = UDim2.new(0.9, 0, 0, 30)
+nickInput.Position = UDim2.new(0.05, 0, 0.1, 0)
+nickInput.PlaceholderText = "Введите ник..."
+nickInput.Text = lastInput
+nickInput.Parent = mainFrame
+
+-- Кнопка активации
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0.9, 0, 0, 50)
+toggleButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleButton.Text = "Авто-прыжок: ВЫКЛ"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 18
+toggleButton.Parent = mainFrame
+
+-- 2. ЛОГИКА СОХРАНЕНИЯ НИКА
+nickInput.FocusLost:Connect(function()
+    lastInput = nickInput.Text
+    print("Ник сохранен: " .. lastInput)
+end)
+
+-- Показываем прошлые записи при фокусе (имитация выпадающего списка в консоль)
+nickInput.Focused:Connect(function()
+    if lastInput ~= "" then
+        print("Ваша прошлая запись: " .. lastInput)
+    end
+end)
+
+-- 3. ЛОГИКА ПРЫЖКА
+toggleButton.MouseButton1Click:Connect(function()
+    jumpingEnabled = not jumpingEnabled
+    
+    if jumpingEnabled then
+        toggleButton.Text = "Авто-прыжок: ВКЛ"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        toggleButton.Text = "Авто-прыжок: ВЫКЛ"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+-- Цикл проверки расстояния до земли
+RunService.Heartbeat:Connect(function()
+    if not jumpingEnabled then return end
+    
+    local character = Player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character.HumanoidRootPart
+        
+        -- Параметры луча (Raycast)
+        local rayOrigin = rootPart.Position
+        local rayDirection = Vector3.new(0, -5, 0) -- Проверяем на 5 единиц вниз
+        
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterDescendantsInstances = {character}
+        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+        
+        local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+        
+        -- Если земля близко (например, меньше 4 единиц), заставляем прыгнуть
+        if raycastResult and humanoid then
+            humanoid.Jump = true
+        end
+    end
+end)
