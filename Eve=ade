@@ -13,8 +13,8 @@ local ENABLE_KEY = Enum.KeyCode.Z
 local isInfiniteBounce = false
 local connection
 
-local BOUNCE_POWER = 52          -- сила отскока вверх (обычный прыжок ~50)
-local GROUND_CHECK_DISTANCE = 3.2  -- за сколько studs до пола отталкиваться
+local BOUNCE_POWER = 10          -- сила отскока вверх (обычный прыжок ~50)
+local GROUND_CHECK_DISTANCE = 2  -- за сколько studs до пола отталкиваться
 
 local function tryBounce()
     if humanoid.Health <= 0 then return end
