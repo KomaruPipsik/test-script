@@ -16,34 +16,39 @@ end
 
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end
-
+	
 	if input.KeyCode == Enum.KeyCode.Z then
 		active = not active
-
+		
 		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = "Авто-прыжок";
-			Text = active and "НИЗКИЙ РЕЖИМ: ВКЛ" or "ВЫКЛЮЧЕНО";
-			Duration = 0.4;
+			Title = "Evade BHOP";
+			Text = active and "РЕЖИМ: ВКЛ" or "РЕЖИМ: ВЫКЛ";
+			Duration = 1;
 		})
 	end
 end)
 
 RunService.Heartbeat:Connect(function()
 	if not active then return end
-
+	
 	local char, hum, root = getCharacterData()
-
+	
 	if char and hum and root and hum.Health > 0 then
-		local params = RaycastParams.new()
-		params.FilterDescendantsInstances = {char}
-		params.FilterType = Enum.RaycastFilterType.Exclude
-
-		-- Теперь проверяем всего на 3.5 единицы вниз (почти у самых ног)
-		local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, 0, 0), params)
-
-		if raycastResult then
-			-- Уменьшили силу прыжка до 35, чтобы отскок был мягким
-			root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 15, root.AssemblyLinearVelocity.Z)
+		-- Проверяем, что персонаж падает или находится очень низко (скорость Y < 1)
+		if root.AssemblyLinearVelocity.Y < 1 then
+			
+			local params = RaycastParams.new()
+			params.FilterDescendantsInstances = {char}
+			params.FilterType = Enum.RaycastFilterType.Exclude
+			
+			-- ДИСТАНЦИЯ: 3.1 — это почти вплотную к полу для стандартного персонажа
+			-- Если персонаж все еще слишком высоко, попробуй поставить 2.8 или 2.9
+			local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, -3.1, 0), params)
+			
+			if raycastResult then
+				-- Даем импульс вверх. 32-35 — это идеальная высота для быстрого бхопа
+				root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 33, root.AssemblyLinearVelocity.Z)
+			end
 		end
 	end
 end)
