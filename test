@@ -43,7 +43,7 @@ RunService.Heartbeat:Connect(function()
 			
 			-- ДИСТАНЦИЯ: 3.1 — это почти вплотную к полу для стандартного персонажа
 			-- Если персонаж все еще слишком высоко, попробуй поставить 2.8 или 2.9
-			local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, -2.2, 0), params)
+			local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, 2.2, 0), params)
 			
 			if raycastResult then
 				-- Даем импульс вверх. 32-35 — это идеальная высота для быстрого бхопа
