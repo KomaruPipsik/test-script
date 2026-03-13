@@ -38,12 +38,23 @@ RunService.Heartbeat:Connect(function()
 		params.FilterDescendantsInstances = {char}
 		params.FilterType = Enum.RaycastFilterType.Exclude
 		
-		-- Теперь проверяем всего на 3.5 единицы вниз (почти у самых ног)
-		local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, -3.5, 0), params)
+		-------------------------------------------------------------------------
+		-- НАСТРОЙКА ДИСТАНЦИИ ДО ПОЛА:
+		-- -3.1 значит, что луч проверяет землю почти вплотную к ногам. 
+		-- Если персонаж все еще "парит", попробуй поставить -2.9 или -3.0.
+		-------------------------------------------------------------------------
+		local distanceToFloor = -3.1 
+		local raycastResult = workspace:Raycast(root.Position, Vector3.new(0, distanceToFloor, 0), params)
 		
 		if raycastResult then
-			-- Уменьшили силу прыжка до 35, чтобы отскок был мягким
-			root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, 35, root.AssemblyLinearVelocity.Z)
+			---------------------------------------------------------------------
+			-- НАСТРОЙКА ВЫСОТЫ ПРЫЖКА (ИМПУЛЬС):
+			-- 28 — это очень низкий прыжок. 
+			-- Если хочешь выше — ставь 35. Если еще ниже — ставь 22.
+			---------------------------------------------------------------------
+			local jumpForce = 28 
+			
+			root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, jumpForce, root.AssemblyLinearVelocity.Z)
 		end
 	end
 end)
