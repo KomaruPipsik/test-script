@@ -14,7 +14,7 @@ local isEnabled = false
 local lastBounceTime = 0
 local BOUNCE_COOLDOWN = 0.18     -- минимальное время между отскоками
 
-local BOUNCE_VELOCITY = 38       -- было 52 → теперь намного ниже и естественнее
+local BOUNCE_VELOCITY = 1       -- было 52 → теперь намного ниже и естественнее
 local TRIGGER_DISTANCE = 3.8     -- расстояние до пола, при котором отталкиваемся
 local MIN_FALL_SPEED = -12       -- если падает медленнее чем это — не отталкиваем
 
