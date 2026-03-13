@@ -1,91 +1,102 @@
--- Ссылка на игрока и сервисы
 local Player = game.Players.LocalPlayer
-local RunService = game.GetService("RunService")
 local UserInputService = game.GetService("UserInputService")
+local RunService = game.GetService("RunService")
 
--- Переменные состояния
+-- Переменные
+local guiCreated = false
 local jumpingEnabled = false
-local lastInput = "" -- Для хранения ника
+local screenGui, mainButton
+local lastSavedNickname = "" -- Переменная для хранения ника
 
--- 1. СОЗДАНИЕ GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AutoJumpGui"
-screenGui.Parent = Player:WaitForChild("PlayerGui")
+-- ФУНКЦИЯ СОЗДАНИЯ КНОПКИ (появится только после нажатия Z)
+local function createJumpGui()
+	if guiCreated then return end
+	
+	screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "HiddenJumpGui"
+	screenGui.Parent = Player:WaitForChild("PlayerGui")
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 200, 0, 150)
-mainFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = screenGui
+	-- Фрейм для красоты и ввода ника
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0, 220, 0, 120)
+	frame.Position = UDim2.new(0.5, -110, 0.7, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	frame.BorderSizePixel = 2
+	frame.Parent = screenGui
 
--- Поле для Ника (с сохранением текста)
-local nickInput = Instance.new("TextBox")
-nickInput.Size = UDim2.new(0.9, 0, 0, 30)
-nickInput.Position = UDim2.new(0.05, 0, 0.1, 0)
-nickInput.PlaceholderText = "Введите ник..."
-nickInput.Text = lastInput
-nickInput.Parent = mainFrame
+	-- Поле ввода ника (запоминает значение)
+	local nickInput = Instance.new("TextBox")
+	nickInput.Size = UDim2.new(0.9, 0, 0, 30)
+	nickInput.Position = UDim2.new(0.05, 0, 0.15, 0)
+	nickInput.PlaceholderText = "Твой ник здесь..."
+	nickInput.Text = lastSavedNickname
+	nickInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	nickInput.TextColor3 = Color3.new(1, 1, 1)
+	nickInput.Parent = frame
 
--- Кнопка активации
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0.9, 0, 0, 50)
-toggleButton.Position = UDim2.new(0.05, 0, 0.5, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-toggleButton.Text = "Авто-прыжок: ВЫКЛ"
-toggleButton.TextColor3 = Color3.new(1, 1, 1)
-toggleButton.Font = Enum.Font.SourceSansBold
-toggleButton.TextSize = 18
-toggleButton.Parent = mainFrame
+	-- Сама кнопка прыжка
+	mainButton = Instance.new("TextButton")
+	mainButton.Size = UDim2.new(0.9, 0, 0, 45)
+	mainButton.Position = UDim2.new(0.05, 0, 0.5, 0)
+	mainButton.Text = "Авто-прыжок: ВЫКЛ"
+	mainButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+	mainButton.TextColor3 = Color3.new(1, 1, 1)
+	mainButton.Font = Enum.Font.SourceSansBold
+	mainButton.TextSize = 20
+	mainButton.Parent = frame
 
--- 2. ЛОГИКА СОХРАНЕНИЯ НИКА
-nickInput.FocusLost:Connect(function()
-    lastInput = nickInput.Text
-    print("Ник сохранен: " .. lastInput)
+	-- Логика сохранения ника при изменении
+	nickInput.FocusLost:Connect(function()
+		lastSavedNickname = nickInput.Text
+	end)
+
+	-- Логика переключения прыжка
+	mainButton.MouseButton1Click:Connect(function()
+		jumpingEnabled = not jumpingEnabled
+		if jumpingEnabled then
+			mainButton.Text = "Авто-прыжок: ВКЛ"
+			mainButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+		else
+			mainButton.Text = "Авто-прыжок: ВЫКЛ"
+			mainButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+		end
+	end)
+
+	guiCreated = true
+end
+
+-- 1. СЛУШАЕМ НАЖАТИЕ КЛАВИШИ Z
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end -- Игнорируем, если игрок пишет в чат
+	
+	if input.KeyCode == Enum.KeyCode.Z then
+		if not guiCreated then
+			createJumpGui() -- Создаем GUI при первом нажатии
+		else
+			screenGui.Enabled = not screenGui.Enabled -- Скрываем/показываем, если уже создан
+		end
+	end
 end)
 
--- Показываем прошлые записи при фокусе (имитация выпадающего списка в консоль)
-nickInput.Focused:Connect(function()
-    if lastInput ~= "" then
-        print("Ваша прошлая запись: " .. lastInput)
-    end
-end)
-
--- 3. ЛОГИКА ПРЫЖКА
-toggleButton.MouseButton1Click:Connect(function()
-    jumpingEnabled = not jumpingEnabled
-    
-    if jumpingEnabled then
-        toggleButton.Text = "Авто-прыжок: ВКЛ"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-    else
-        toggleButton.Text = "Авто-прыжок: ВЫКЛ"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    end
-end)
-
--- Цикл проверки расстояния до земли
+-- 2. ЛОГИКА "ОТСКОКА" ОТ ВОЗДУХА
 RunService.Heartbeat:Connect(function()
-    if not jumpingEnabled then return end
-    
-    local character = Player.Character
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character.HumanoidRootPart
-        
-        -- Параметры луча (Raycast)
-        local rayOrigin = rootPart.Position
-        local rayDirection = Vector3.new(0, -5, 0) -- Проверяем на 5 единиц вниз
-        
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {character}
-        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-        
-        local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-        
-        -- Если земля близко (например, меньше 4 единиц), заставляем прыгнуть
-        if raycastResult and humanoid then
-            humanoid.Jump = true
-        end
-    end
+	if not jumpingEnabled then return end
+	
+	local char = Player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	
+	if root and hum then
+		-- Проверяем расстояние до земли (луч вниз на 5.5 единиц)
+		local params = RaycastParams.new()
+		params.FilterDescendantsInstances = {char}
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		
+		local result = workspace:Raycast(root.Position, Vector3.new(0, -5.5, 0), params)
+		
+		-- Если результат есть, значит земля близко — прыгаем!
+		if result then
+			hum.Jump = true
+		end
+	end
 end)
