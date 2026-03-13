@@ -1,4 +1,4 @@
--- LocalScript (положи в StarterPlayer → StarterPlayerScripts)
+-- LocalScript → StarterPlayerScripts
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -6,62 +6,76 @@ local Players = game:GetService("Players")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local hrp = character:WaitForChild("HumanoidRootPart")   -- HumanoidRootPart
+local humanoid = character:WaitForChild("Humanoid", 8)
+local root = character:WaitForChild("HumanoidRootPart", 8)
 
-local ENABLE_KEY = Enum.KeyCode.Z
-local isInfiniteBounce = false
+local KEY = Enum.KeyCode.Z
+local isEnabled = false
+local lastBounceTime = 0
+local BOUNCE_COOLDOWN = 0.18     -- минимальное время между отскоками
+
+local BOUNCE_VELOCITY = 38       -- было 52 → теперь намного ниже и естественнее
+local TRIGGER_DISTANCE = 3.8     -- расстояние до пола, при котором отталкиваемся
+local MIN_FALL_SPEED = -12       -- если падает медленнее чем это — не отталкиваем
+
 local connection
 
-local BOUNCE_POWER = 10          -- сила отскока вверх (обычный прыжок ~50)
-local GROUND_CHECK_DISTANCE = 2  -- за сколько studs до пола отталкиваться
-
-local function tryBounce()
-    if humanoid.Health <= 0 then return end
-    if hrp.Velocity.Y > -10 then return end   -- не отталкиваем если ещё летим вверх или почти не падаем
-
-    local ray = Ray.new(hrp.Position, Vector3.new(0, -500, 0))
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {character}
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-    local result = workspace:Raycast(ray.Origin, ray.Direction, raycastParams)
-
-    if result then
-        local distance = (hrp.Position - result.Position).Y
-        if distance <= GROUND_CHECK_DISTANCE then
-            -- отталкиваемся
-            hrp.Velocity = Vector3.new(
-                hrp.Velocity.X * 0.3,
-                BOUNCE_POWER,
-                hrp.Velocity.Z * 0.3
+local function safeBounce()
+    if tick() - lastBounceTime < BOUNCE_COOLDOWN then
+        return
+    end
+    
+    if humanoid.Health <= 0 or humanoid:GetState() == Enum.HumanoidStateType.Dead then
+        return
+    end
+    
+    if root.Velocity.Y > -5 then   -- почти не падает или летит вверх → пропускаем
+        return
+    end
+    
+    local rayParams = RaycastParams.new()
+    rayParams.FilterDescendantsInstances = {character}
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.IgnoreWater = true
+    
+    local rayResult = workspace:Raycast(root.Position, Vector3.new(0, -50, 0), rayParams)
+    
+    if rayResult then
+        local distToFloor = (root.Position.Y - rayResult.Position.Y)
+        
+        if distToFloor <= TRIGGER_DISTANCE and root.Velocity.Y < MIN_FALL_SPEED then
+            -- мягкое гашение горизонтальной скорости + сильный импульс вверх
+            local newVel = Vector3.new(
+                root.Velocity.X * 0.35,
+                BOUNCE_VELOCITY,
+                root.Velocity.Z * 0.35
             )
+            
+            root.Velocity = newVel
+            lastBounceTime = tick()
         end
     end
 end
 
-local function onInputBegan(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode ~= ENABLE_KEY then return end
-
-    isInfiniteBounce = not isInfiniteBounce
-
-    if isInfiniteBounce then
+local function toggleMode()
+    isEnabled = not isEnabled
+    
+    if isEnabled then
         game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-            Text = "[Infinite Bounce] → ВКЛЮЧЕНО",
-            Color = Color3.fromRGB(50, 255, 100),
+            Text = "Бесконечный отскок → ВКЛЮЧЕН (Z для выключения)",
+            Color = Color3.fromRGB(60, 255, 120),
             Font = Enum.Font.SourceSansBold
         })
-
+        
         if connection then connection:Disconnect() end
-        connection = RunService.Heartbeat:Connect(tryBounce)
+        connection = RunService.Heartbeat:Connect(safeBounce)
     else
         game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-            Text = "[Infinite Bounce] → ВЫКЛЮЧЕНО",
-            Color = Color3.fromRGB(255, 80, 80),
+            Text = "Бесконечный отскок → ВЫКЛЮЧЕН",
+            Color = Color3.fromRGB(255, 90, 90),
             Font = Enum.Font.SourceSansBold
         })
-
+        
         if connection then
             connection:Disconnect()
             connection = nil
@@ -69,17 +83,26 @@ local function onInputBegan(input, gameProcessed)
     end
 end
 
-UserInputService.InputBegan:Connect(onInputBegan)
-
--- на респаун персонажа
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    humanoid = newChar:WaitForChild("Humanoid")
-    hrp = newChar:WaitForChild("HumanoidRootPart")
-
-    -- если режим был включён — сразу подключаем снова
-    if isInfiniteBounce then
-        if connection then connection:Disconnect() end
-        connection = RunService.Heartbeat:Connect(tryBounce)
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == KEY then
+        toggleMode()
     end
 end)
+
+-- респаун
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid", 8)
+    root = newChar:WaitForChild("HumanoidRootPart", 8)
+    
+    if isEnabled then
+        if connection then connection:Disconnect() end
+        connection = RunService.Heartbeat:Connect(safeBounce)
+    end
+end)
+
+-- если персонаж уже загружен
+if character and humanoid and root then
+    -- ничего не делаем, ждём нажатия Z
+end
