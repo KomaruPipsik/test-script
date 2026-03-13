@@ -1,0 +1,96 @@
+-- LocalScript → должен лежать в StarterPlayerScripts
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local JUMP_KEY = Enum.KeyCode.Z          -- клавиша
+local BOUNCE_HEIGHT = 18                 -- высота отскока (примерно как обычный прыжок × 1.3–1.5)
+local DETECTION_DISTANCE = 2.8           -- за сколько studs до пола начинать отскок
+local ANTI_FALL_SPEED = -35              -- если падает быстрее — отскок срабатывает раньше
+
+local isBouncingEnabled = false
+local connection
+
+-- Функция отскока
+local function doBounce()
+    if not rootPart or not rootPart.Parent then return end
+    
+    -- Создаём импульс вверх
+    rootPart.Velocity = Vector3.new(
+        rootPart.Velocity.X * 0.4,     -- немного гасим горизонтальную скорость
+        BOUNCE_HEIGHT,
+        rootPart.Velocity.Z * 0.4
+    )
+    
+    -- Можно добавить небольшой визуальный/звуковой эффект
+    -- game:GetService("Debris"):AddItem(эффект, 0.6)
+end
+
+-- Проверка состояния каждый кадр
+local function checkFall()
+    if not isBouncingEnabled then return end
+    if humanoid:GetState() == Enum.HumanoidStateType.Dead then return end
+    
+    local rayOrigin = rootPart.Position
+    local rayDirection = Vector3.new(0, -100, 0)
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    
+    local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+    
+    if result then
+        local distanceToFloor = (rootPart.Position - result.Position).Magnitude
+        
+        -- Проверяем, падает ли персонаж вниз и близко к полу
+        local fallingFast = rootPart.Velocity.Y < ANTI_FALL_SPEED
+        local closeToGround = distanceToFloor <= DETECTION_DISTANCE
+        
+        if closeToGround and (fallingFast or rootPart.Velocity.Y < -1) then
+            doBounce()
+        end
+    end
+end
+
+-- Включаем/выключаем режим при нажатии Z
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == JUMP_KEY then
+        isBouncingEnabled = not isBouncingEnabled
+        
+        if isBouncingEnabled then
+            -- включаем
+            print("Бесконечный антифол → ВКЛ")
+            if not connection then
+                connection = RunService.Heartbeat:Connect(checkFall)
+            end
+        else
+            -- выключаем
+            print("Бесконечный антифол → ВЫКЛ")
+            if connection then
+                connection:Disconnect()
+                connection = nil
+            end
+        end
+    end
+end)
+
+-- Обновляем ссылки при респавне
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid", 5)
+    rootPart = newChar:WaitForChild("HumanoidRootPart", 5)
+    
+    -- если режим был включён — продолжаем
+    if isBouncingEnabled and connection == nil then
+        connection = RunService.Heartbeat:Connect(checkFall)
+    end
+end)
