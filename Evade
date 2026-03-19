@@ -9,8 +9,6 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid", 8)
 local root = character:WaitForChild("HumanoidRootPart", 8)
 
--- Изменено: используем MouseButton5 (аналог XBUTTON2)
-local MOUSE_BUTTON = Enum.UserInputType.MouseButton5
 local isEnabled = false
 local lastBounceTime = 0
 local BOUNCE_COOLDOWN = 0     -- минимальное время между отскоками
@@ -62,7 +60,7 @@ local function toggleMode()
     
     if isEnabled then
         game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-            Text = "Бесконечный отскок → ВКЛЮЧЕН (Mouse5 для выключения)",
+            Text = "Бесконечный отскок → ВКЛЮЧЕН (Боковая кнопка мыши для выключения)",
             Color = Color3.fromRGB(60, 255, 120),
             Font = Enum.Font.SourceSansBold
         })
@@ -83,10 +81,11 @@ local function toggleMode()
     end
 end
 
--- Изменена проверка: теперь смотрим на UserInputType
+-- Проверяем обе боковые кнопки мыши (XBUTTON1 и XBUTTON2)
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
-    if input.UserInputType == MOUSE_BUTTON then
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton4 or input.UserInputType == Enum.UserInputType.MouseButton5 then
         toggleMode()
     end
 end)
@@ -103,6 +102,7 @@ player.CharacterAdded:Connect(function(newChar)
     end
 end)
 
+-- если персонаж уже загружен
 if character and humanoid and root then
-    -- Ожидание нажатия кнопки мыши
+    -- ничего не делаем, ждём нажатия боковой кнопки мыши
 end
