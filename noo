@@ -9,14 +9,15 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid", 8)
 local root = character:WaitForChild("HumanoidRootPart", 8)
 
-local KEY = Enum.KeyCode.Z
+-- Изменено: используем MouseButton5 (аналог XBUTTON2)
+local MOUSE_BUTTON = Enum.UserInputType.MouseButton5
 local isEnabled = false
 local lastBounceTime = 0
 local BOUNCE_COOLDOWN = 0     -- минимальное время между отскоками
 
-local BOUNCE_VELOCITY = 15       -- было 52 → теперь намного ниже и естественнее
-local TRIGGER_DISTANCE = 3.8     -- расстояние до пола, при котором отталкиваемся
-local MIN_FALL_SPEED = 1       -- если падает медленнее чем это — не отталкиваем
+local BOUNCE_VELOCITY = 15       -- сила отскока
+local TRIGGER_DISTANCE = 3.8     -- расстояние до пола
+local MIN_FALL_SPEED = 1       -- порог скорости падения
 
 local connection
 
@@ -25,11 +26,11 @@ local function safeBounce()
         return
     end
     
-    if humanoid.Health <= 0 or humanoid:GetState() == Enum.HumanoidStateType.Dead then
+    if not character or not root or humanoid.Health <= 0 or humanoid:GetState() == Enum.HumanoidStateType.Dead then
         return
     end
     
-    if root.Velocity.Y > -5 then   -- почти не падает или летит вверх → пропускаем
+    if root.Velocity.Y > -5 then   
         return
     end
     
@@ -44,7 +45,6 @@ local function safeBounce()
         local distToFloor = (root.Position.Y - rayResult.Position.Y)
         
         if distToFloor <= TRIGGER_DISTANCE and root.Velocity.Y < MIN_FALL_SPEED then
-            -- мягкое гашение горизонтальной скорости + сильный импульс вверх
             local newVel = Vector3.new(
                 root.Velocity.X * 0.35,
                 BOUNCE_VELOCITY,
@@ -62,7 +62,7 @@ local function toggleMode()
     
     if isEnabled then
         game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-            Text = "Бесконечный отскок → ВКЛЮЧЕН (Z для выключения)",
+            Text = "Бесконечный отскок → ВКЛЮЧЕН (Mouse5 для выключения)",
             Color = Color3.fromRGB(60, 255, 120),
             Font = Enum.Font.SourceSansBold
         })
@@ -83,9 +83,10 @@ local function toggleMode()
     end
 end
 
+-- Изменена проверка: теперь смотрим на UserInputType
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
-    if input.KeyCode == KEY then
+    if input.UserInputType == MOUSE_BUTTON then
         toggleMode()
     end
 end)
@@ -102,7 +103,6 @@ player.CharacterAdded:Connect(function(newChar)
     end
 end)
 
--- если персонаж уже загружен
 if character and humanoid and root then
-    -- ничего не делаем, ждём нажатия Z
+    -- Ожидание нажатия кнопки мыши
 end
