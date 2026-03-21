@@ -11,7 +11,7 @@ local humanoid = character:WaitForChild("Humanoid", 8)
 local root = character:WaitForChild("HumanoidRootPart", 8)
 
 
-local KEY = Enum.KeyCode.MouseButton5
+local KEY = Z
 local isEnabled = false
 local lastBounceTime = 0
 local BOUNCE_COOLDOWN = 0     -- минимальное время между отскоками
