@@ -120,19 +120,35 @@ local Keybinds = {
 local BindBtnRefs = {}   -- bindKey -> TextButton (чтобы обновлять текст)
 local ToggleSetters = {} -- stateKey -> function(bool)
 
+-- Все типы мыши включая боковые кнопки
 local MOUSE_TYPES = {
 	Enum.UserInputType.MouseButton1,
 	Enum.UserInputType.MouseButton2,
 	Enum.UserInputType.MouseButton3,
+	Enum.UserInputType.MouseButton4,  -- боковая кнопка назад
+	Enum.UserInputType.MouseButton5,  -- боковая кнопка вперёд
 }
 local MOUSE_NAMES = {
 	[Enum.UserInputType.MouseButton1] = "ЛКМ",
 	[Enum.UserInputType.MouseButton2] = "ПКМ",
 	[Enum.UserInputType.MouseButton3] = "СКМ",
+	[Enum.UserInputType.MouseButton4] = "Мышь4",
+	[Enum.UserInputType.MouseButton5] = "Мышь5",
+}
+-- Специальные клавиши-модификаторы которые принимаем
+local SPECIAL_KEYS = {
+	[Enum.KeyCode.LeftShift]    = "LShift",
+	[Enum.KeyCode.RightShift]   = "RShift",
+	[Enum.KeyCode.LeftControl]  = "LCtrl",
+	[Enum.KeyCode.RightControl] = "RCtrl",
+	[Enum.KeyCode.LeftAlt]      = "LAlt",
+	[Enum.KeyCode.RightAlt]     = "RAlt",
 }
 local function bindName(b)
 	if not b then return "—" end
-	if b.type == "key" then return b.value.Name end
+	if b.type == "key" then
+		return SPECIAL_KEYS[b.value] or b.value.Name
+	end
 	return MOUSE_NAMES[b.value] or "?"
 end
 local function bindMatches(b, inp)
@@ -173,6 +189,7 @@ local State = {
 	ShowNotifs   = true,   -- переключатель уведомлений
 	LagSwitchOn  = false,  -- Lag Switch активен
 	BoostFPS     = false,  -- Boost FPS
+	AutoFarm     = false,  -- Авто-фарм тикетов
 }
 -- Конфиг Lag Switch
 CONFIG.LagSwitchForce = 45
@@ -813,17 +830,12 @@ fpsLine.Size = UDim2.new(1, 0, 0, 2); fpsLine.BackgroundColor3 = Color3.fromRGB(
 fpsLine.BorderSizePixel = 0; fpsLine.ZIndex = 31; fpsLine.Parent = fpsWidget
 Instance.new("UICorner").Parent = fpsLine
 
-local fpsTitle = Instance.new("TextLabel")
-fpsTitle.Size = UDim2.new(1, 0, 0, 12); fpsTitle.Position = UDim2.new(0, 0, 0, 4)
-fpsTitle.BackgroundTransparency = 1; fpsTitle.TextColor3 = Color3.fromRGB(60, 200, 120)
-fpsTitle.TextSize = 8; fpsTitle.Font = Enum.Font.SourceSansBold
-fpsTitle.Text = "FPS METER"; fpsTitle.Parent = fpsWidget
-
+-- Только цифры без надписи FPS METER
 local fpsLbl = Instance.new("TextLabel")
-fpsLbl.Size = UDim2.new(1, 0, 0, 18); fpsLbl.Position = UDim2.new(0, 0, 0, 16)
-fpsLbl.BackgroundTransparency = 1; fpsLbl.TextColor3 = Color3.fromRGB(220, 230, 255)
-fpsLbl.TextSize = 16; fpsLbl.Font = Enum.Font.SourceSansBold
-fpsLbl.Text = "-- fps"; fpsLbl.Parent = fpsWidget
+fpsLbl.Size = UDim2.new(1, 0, 1, -4); fpsLbl.Position = UDim2.new(0, 0, 0, 4)
+fpsLbl.BackgroundTransparency = 1; fpsLbl.TextColor3 = Color3.fromRGB(60, 210, 120)
+fpsLbl.TextSize = 20; fpsLbl.Font = Enum.Font.SourceSansBold
+fpsLbl.Text = "--"; fpsLbl.Parent = fpsWidget
 
 -- FPS counter logic
 local fpsHistory = {}
@@ -1414,6 +1426,119 @@ do
 		CONFIG.SlopeRandMax = math.max(v, CONFIG.SlopeRandMin + 1)
 	end, 33)
 
+	-- ── Авто-фарм тикетов ──
+	makeSection(f, "Авто-фарм тикетов", 33)
+
+	-- Платформа под игроком чтобы не упасть
+	local _farmPlatform = nil
+	local function ensureFarmPlatform()
+		local char = getChar(); if not char then return end
+		local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
+		if _farmPlatform and _farmPlatform.Parent then
+			-- Двигаем платформу под игрока
+			_farmPlatform.CFrame = CFrame.new(root.Position + Vector3.new(0, -3, 0))
+			return
+		end
+		_farmPlatform = Instance.new("Part")
+		_farmPlatform.Name      = "_FarmPlatform"
+		_farmPlatform.Anchored  = true
+		_farmPlatform.CanCollide= true
+		_farmPlatform.Size      = Vector3.new(10, 1, 10)
+		_farmPlatform.BrickColor= BrickColor.new("Bright blue")
+		_farmPlatform.Material  = Enum.Material.Neon
+		_farmPlatform.Transparency = 0.5
+		_farmPlatform.CFrame    = CFrame.new(root.Position + Vector3.new(0, -3, 0))
+		_farmPlatform.Parent    = workspace
+	end
+	local function removeFarmPlatform()
+		if _farmPlatform and _farmPlatform.Parent then _farmPlatform:Destroy() end
+		_farmPlatform = nil
+	end
+
+	-- Возвращает Visual-модельки из Effects/Tickets
+	local function getTickets()
+		local tickets = {}
+		local ok, folder = pcall(function()
+			return workspace.Effects.Tickets
+		end)
+		if not ok or not folder then return tickets end
+		for _, child in ipairs(folder:GetChildren()) do
+			if child:IsA("Model") and child.Name == "Visual" then
+				table.insert(tickets, child)
+			end
+		end
+		return tickets
+	end
+
+	-- Возвращает позицию модельки (PrimaryPart или первый BasePart)
+	local function getModelPos(model)
+		if model.PrimaryPart then return model.PrimaryPart.Position end
+		local p = model:FindFirstChildWhichIsA("BasePart")
+		return p and p.Position or nil
+	end
+
+	makeToggle(f, "Авто-фарм тикетов", "Телепортирует к Visual в Effects/Tickets автоматически",
+		function(on)
+			State.AutoFarm = on
+			if not on then
+				removeFarmPlatform()
+				notify("Авто-фарм: ВЫКЛ")
+			else
+				notify("Авто-фарм: ВКЛ — ищу тикеты...", Color3.fromRGB(255, 215, 50))
+				task.spawn(function()
+					while State.AutoFarm do
+						local char = getChar()
+						local root = char and char:FindFirstChild("HumanoidRootPart")
+						if root then
+							local tickets = getTickets()
+							if #tickets > 0 then
+								-- Берём ближайший тикет
+								local best, bestDist = nil, math.huge
+								for _, t in ipairs(tickets) do
+									local pos = getModelPos(t)
+									if pos then
+										local d = (pos - root.Position).Magnitude
+										if d < bestDist then bestDist = d; best = t end
+									end
+								end
+								if best then
+									local tPos = getModelPos(best)
+									if tPos then
+										-- Телепорт на 500 блоков выше тикета
+										local safePos = tPos + Vector3.new(0, 500, 0)
+										root.CFrame = CFrame.new(safePos)
+										-- Создаём платформу под игроком
+										task.wait(0.05)
+										ensureFarmPlatform()
+										notify("Тикет найден! Жди...", Color3.fromRGB(255, 215, 50))
+										-- Ждём пока тикет не исчезнет (подобрали) или таймаут
+										local waited = 0
+										while best and best.Parent and waited < 8 do
+											task.wait(0.2); waited = waited + 0.2
+										end
+										-- Телепорт обратно на тикет (теперь его нет — стоим в воздухе)
+										if not best.Parent then
+											notify("Тикет собран! ✓", Color3.fromRGB(80, 220, 100))
+										end
+									end
+								else
+									-- Тикетов нет — ждём
+									removeFarmPlatform()
+									task.wait(1)
+								end
+							else
+								removeFarmPlatform()
+								task.wait(1)
+							end
+						else
+							task.wait(0.5)
+						end
+					end
+					removeFarmPlatform()
+				end)
+			end
+		end, 33, "AutoFarm")
+
 	makeSection(f, "Lag Switch", 34)
 	makeToggle(f, "Lag Switch", "При нажатии клавиши — рывок по направлению движения",
 		function(on)
@@ -1431,11 +1556,13 @@ do
 			CONFIG.ShowStatusOverlay = on
 			statusOvF.Visible = on
 		end, 39, "ShowOverlay")
-	makeToggle(f, "Показывать уведомления", "Всплывающие уведомления в углу экрана",
+
+	-- Показывать уведомления — находится здесь, в Настройках (Главное)
+	makeToggle(f, "Показывать уведомления", "Включить/выключить всплывающие уведомления в углу",
 		function(on)
 			State.ShowNotifs = on
 		end, 40, "ShowNotifs")
-	-- По умолчанию уведомления включены
+	-- Включены по умолчанию
 	do local s = ToggleSetters["ShowNotifs"]; if s then s(true) end end
 end
 
@@ -1545,31 +1672,51 @@ do
 	end
 
 	-- ── Boost FPS ──
+	-- Сохраняем оригинальные состояния эффектов перед отключением
+	local _boostFPS_savedEffects = {}
+	local _boostFPS_savedAtmo = {}
+
 	makeSection(f, "Производительность", 26)
-	makeToggle(f, "Boost FPS", "Отключает тяжёлые эффекты и снижает детализацию",
+	makeToggle(f, "Boost FPS", "Отключает тяжёлые эффекты. При выключении всё возвращается",
 		function(on)
 			State.BoostFPS = on
 			if on then
+				-- Сохраняем текущие состояния и отключаем
+				_boostFPS_savedEffects = {}
+				_boostFPS_savedAtmo = {}
 				for _, obj in ipairs(Lighting:GetChildren()) do
 					if obj:IsA("BlurEffect") or obj:IsA("SunRaysEffect") or obj:IsA("BloomEffect")
-						or obj:IsA("DepthOfFieldEffect") then
+						or obj:IsA("DepthOfFieldEffect") or obj:IsA("ColorCorrectionEffect") then
+						_boostFPS_savedEffects[obj] = obj.Enabled
 						obj.Enabled = false
 					end
 					if obj:IsA("Atmosphere") then
+						_boostFPS_savedAtmo[obj] = {
+							Density = obj.Density,
+							Haze    = obj.Haze,
+							Glare   = obj.Glare,
+						}
 						obj.Density = 0; obj.Haze = 0; obj.Glare = 0
 					end
 				end
 				pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
-				notify("Boost FPS: ВКЛ — текстуры снижены", Color3.fromRGB(255,190,50))
+				notify("Boost FPS: ВКЛ", Color3.fromRGB(255,190,50))
 			else
-				for _, obj in ipairs(Lighting:GetChildren()) do
-					if obj:IsA("BlurEffect") or obj:IsA("SunRaysEffect") or obj:IsA("BloomEffect")
-						or obj:IsA("DepthOfFieldEffect") then
-						obj.Enabled = true
+				-- Восстанавливаем сохранённые состояния
+				for obj, wasEnabled in pairs(_boostFPS_savedEffects) do
+					if obj and obj.Parent then obj.Enabled = wasEnabled end
+				end
+				for obj, saved in pairs(_boostFPS_savedAtmo) do
+					if obj and obj.Parent then
+						obj.Density = saved.Density
+						obj.Haze    = saved.Haze
+						obj.Glare   = saved.Glare
 					end
 				end
+				_boostFPS_savedEffects = {}
+				_boostFPS_savedAtmo    = {}
 				pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic end)
-				notify("Boost FPS: ВЫКЛ", Color3.fromRGB(120,130,160))
+				notify("Boost FPS: ВЫКЛ — текстуры восстановлены", Color3.fromRGB(120,210,160))
 			end
 		end, 27)
 
@@ -1633,56 +1780,71 @@ do
 	end, 7)
 
 	makeSection(f, "ESP / Подсветка", 8)
-	makeToggle(f, "Player ESP", "Подсвечивает игроков синим (через стены)",
+	makeToggle(f, "Player ESP", "Подсвечивает ИГРОКОВ синим (через стены)",
 		function(on)
 			State.PlayerESP = on
 			if not on then
+				-- Удаляем все подсветки игроков
 				for _, p in ipairs(Players:GetPlayers()) do
 					if p ~= Player and p.Character then
-						local h = p.Character:FindFirstChild("_PlayerHL"); if h then h:Destroy() end
+						removeHL(p.Character, "_PlayerHL")
+					end
+				end
+				-- Также ищем в workspace.Players (модель)
+				local wsPlayers = workspace:FindFirstChild("Players")
+				if wsPlayers then
+					for _, model in ipairs(wsPlayers:GetChildren()) do
+						local teamTag = model:FindFirstChild("Team")
+						if teamTag and teamTag.Value == "PlayerTeam" then
+							removeHL(model, "_PlayerHL")
+						end
 					end
 				end
 			end
 			notify(on and "Player ESP: ВКЛ" or "Player ESP: ВЫКЛ")
 		end, 9)
-	makeToggle(f, "Bot / NPC ESP", "Подсвечивает ботов и NPC красным",
+	makeToggle(f, "Bot / NPC ESP", "Подсвечивает БОТОВ (AI) красным",
 		function(on)
 			State.BotESP = on
 			if not on then
 				for _, d in ipairs(workspace:GetDescendants()) do
 					if d:IsA("Highlight") and d.Name == "_BotHL" then d:Destroy() end
 				end
+				-- Также через workspace.Players
+				local wsPlayers = workspace:FindFirstChild("Players")
+				if wsPlayers then
+					for _, model in ipairs(wsPlayers:GetChildren()) do
+						local teamTag = model:FindFirstChild("Team")
+						if teamTag and teamTag.Value == "AI" then
+							removeHL(model, "_BotHL")
+						end
+					end
+				end
 			end
 			notify(on and "Bot ESP: ВКЛ" or "Bot ESP: ВЫКЛ")
 		end, 10)
-	makeToggle(f, "Distance ESP", "Расстояние до каждого игрока над головой",
+	makeToggle(f, "Distance ESP", "Метры до каждого игрока/бота над головой",
 		function(on)
 			State.DistanceESP = on
 			if not on then
+				-- Удаляем у Roblox-игроков
 				for _, p in ipairs(Players:GetPlayers()) do
 					if p.Character then
 						local r = p.Character:FindFirstChild("HumanoidRootPart")
 						if r then local b = r:FindFirstChild("_DistBG"); if b then b:Destroy() end end
 					end
 				end
+				-- Удаляем у ws.Players моделей
+				local wsPlayers = workspace:FindFirstChild("Players")
+				if wsPlayers then
+					for _, model in ipairs(wsPlayers:GetChildren()) do
+						local r = model:FindFirstChild("HumanoidRootPart")
+						if r then local b = r:FindFirstChild("_DistBG"); if b then b:Destroy() end end
+					end
+				end
 			end
 			notify(on and "Distance ESP: ВКЛ" or "Distance ESP: ВЫКЛ")
 		end, 11)
-
-	makeSection(f, "Эффекты", 12)
-	makeToggle(f, "Rainbow Trail", "Радужный след за персонажем",
-		function(on) State.RainbowTrail = on; notify(on and "Rainbow Trail: ВКЛ" or "ВЫКЛ") end, 13)
-	makeToggle(f, "Spinbot", "Персонаж вращается вокруг оси",
-		function(on)
-			State.Spinbot = on
-			if not on then
-				local root = getChar() and getChar():FindFirstChild("HumanoidRootPart")
-				if root then local b = root:FindFirstChild("_SpinBAV"); if b then b:Destroy() end end
-			end
-			notify(on and "Spinbot: ВКЛ" or "Spinbot: ВЫКЛ")
-		end, 14)
-	makeToggle(f, "Fake Lag", "Рывки персонажа (видно другим)",
-		function(on) State.FakeLag = on; notify(on and "Fake Lag: ВКЛ" or "Fake Lag: ВЫКЛ") end, 15)
 
 	makeSection(f, "Телепорт", 16)
 
@@ -1885,31 +2047,6 @@ do
 	makeSlider(f, "Размер хитбокса (×)", 10, 50, 20, "×0.1", function(v)
 		cactusHBScale = v / 10  -- 20 = x2.0, 10 = x1.0, 50 = x5.0
 	end, 99)
-
-	-- ── Невидимые стенки (InvisParts/Barrier) ──
-	makeSection(f, "Невидимые стенки", 100)
-	makeToggle(f, "Показать Barrier стенки", "workspace.Game.Map.InvisParts → красные 40%",
-		function(on)
-			local ok, invFolder = pcall(function()
-				return workspace.Game.Map.InvisParts
-			end)
-			if not ok or not invFolder then
-				notify("InvisParts не найден!", Color3.fromRGB(200,80,80)); return
-			end
-			for _, part in ipairs(invFolder:GetDescendants()) do
-				if part:IsA("BasePart") and part.Name == "Barrier" then
-					if on then
-						part.Color = Color3.fromRGB(255,60,60)
-						part.Transparency = 0.6
-						part.Material = Enum.Material.Neon
-					else
-						part.Transparency = 1
-						part.Material = Enum.Material.SmoothPlastic
-					end
-				end
-			end
-			notify(on and "Стенки: ВИДНЫ" or "Стенки: СКРЫТЫ", Color3.fromRGB(255,100,100))
-		end, 101)
 
 	-- ── Спавн карты ──
 	makeSection(f, "Спавн карты", 110)
@@ -2365,12 +2502,14 @@ end)
 local _rayParamsChar = RaycastParams.new()
 _rayParamsChar.FilterType = Enum.RaycastFilterType.Exclude
 
--- Player ESP / Distance в отдельном медленном цикле (не каждый кадр!)
+-- Player ESP / Distance / Bot ESP в отдельном медленном цикле (не каждый кадр!)
 task.spawn(function()
 	while true do
-		task.wait(0.25)  -- 4 раза в секунду достаточно
+		task.wait(0.25)
 		local char = getChar()
 		local root = char and char:FindFirstChild("HumanoidRootPart")
+
+		-- 1. Roblox Players (через сервис Players)
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= Player and p.Character then
 				local pChar = p.Character
@@ -2384,10 +2523,62 @@ task.spawn(function()
 					local bg = ensureDistBG(pChar)
 					if bg then
 						local dl = bg:FindFirstChild("D")
-						if dl then dl.Text = math.floor((root.Position-pRoot.Position).Magnitude).."m" end
+						if dl then dl.Text = math.floor((root.Position-pRoot.Position).Magnitude).."м" end
 					end
 				elseif pRoot then
 					local b = pRoot:FindFirstChild("_DistBG"); if b then b:Destroy() end
+				end
+			end
+		end
+
+		-- 2. workspace.Players — модельки с тегом Team
+		-- Если Team.Value == "PlayerTeam" → это игрок (синий ESP)
+		-- Если Team.Value == "AI"         → это нексбот (красный ESP)
+		local wsPlayersFolder = workspace:FindFirstChild("Players")
+		if wsPlayersFolder then
+			for _, model in ipairs(wsPlayersFolder:GetChildren()) do
+				if model:IsA("Model") then
+					local teamTag = model:FindFirstChild("Team")
+					local pRoot   = model:FindFirstChild("HumanoidRootPart")
+
+					if teamTag then
+						local teamVal = teamTag.Value or (teamTag:IsA("StringValue") and teamTag.Value) or ""
+
+						if teamVal == "PlayerTeam" then
+							-- Игрок
+							if State.PlayerESP then
+								ensureHL(model, "_PlayerHL", Color3.fromRGB(50,150,255), Color3.fromRGB(90,190,255))
+							else
+								removeHL(model, "_PlayerHL")
+							end
+							if State.DistanceESP and pRoot and root then
+								local bg = ensureDistBG(model)
+								if bg then
+									local dl = bg:FindFirstChild("D")
+									if dl then dl.Text = math.floor((root.Position-pRoot.Position).Magnitude).."м" end
+								end
+							elseif pRoot then
+								local b = pRoot:FindFirstChild("_DistBG"); if b then b:Destroy() end
+							end
+
+						elseif teamVal == "AI" then
+							-- Нексбот
+							if State.BotESP then
+								ensureHL(model, "_BotHL", Color3.fromRGB(255,60,60), Color3.fromRGB(255,120,120))
+							else
+								removeHL(model, "_BotHL")
+							end
+							if State.DistanceESP and pRoot and root then
+								local bg = ensureDistBG(model)
+								if bg then
+									local dl = bg:FindFirstChild("D")
+									if dl then dl.Text = math.floor((root.Position-pRoot.Position).Magnitude).."м" end
+								end
+							elseif pRoot then
+								local b = pRoot:FindFirstChild("_DistBG"); if b then b:Destroy() end
+							end
+						end
+					end
 				end
 			end
 		end
@@ -2485,60 +2676,66 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 
--- ── Lag Switch: рывок по направлению движения ──
+-- ── Lag Switch (логика из script2 by Pixie) ──
+local _lagSwitchActive = false
+
 local function doLagSwitch()
+	if _lagSwitchActive then return end
 	local char = getChar(); if not char then return end
 	local root = char:FindFirstChild("HumanoidRootPart")
 	local hum  = char:FindFirstChild("Humanoid")
 	if not root or not hum then return end
 
-	-- Проверяем угол поверхности под ногами
+	-- Направление движения
+	local direction = root.CFrame.LookVector
+	local speed = root.AssemblyLinearVelocity.Magnitude
+	if speed < 1 then speed = 20 end
+
+	-- Проверяем угол поверхности (не работаем на >89°)
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
 	rp.FilterDescendantsInstances = {char}
 	local hit = workspace:Raycast(root.Position, Vector3.new(0, -6, 0), rp)
-
-	-- Не работаем на почти вертикальных поверхностях (>89°)
 	if hit then
 		local surfAngle = math.deg(math.acos(math.clamp(
 			hit.Normal:Dot(Vector3.new(0,1,0)), -1, 1)))
 		if surfAngle > 89 then return end
 	end
 
-	-- Направление рывка: по скорости или по look vector
-	local vel = root.AssemblyLinearVelocity
-	local dir
-	if Vector3.new(vel.X, 0, vel.Z).Magnitude > 1 then
-		dir = Vector3.new(vel.X, 0, vel.Z).Unit
-	else
-		local lv = root.CFrame.LookVector
-		dir = Vector3.new(lv.X, 0, lv.Z).Unit
-	end
+	_lagSwitchActive = true
 
-	-- Случайное отклонение угла
-	local ang = math.rad(math.random(-20, 20))
-	local cos, sin = math.cos(ang), math.sin(ang)
-	local dashDir = Vector3.new(
-		dir.X * cos - dir.Z * sin, 0,
-		dir.X * sin + dir.Z * cos).Unit
+	-- 1. Анти-гравитация через VectorForce
+	local attachment = Instance.new("Attachment", root)
+	local vf = Instance.new("VectorForce", root)
+	vf.Attachment0 = attachment
+	pcall(function()
+		vf.Force = Vector3.new(0, workspace.Gravity * root:GetMass(), 0)
+	end)
 
-	local force = CONFIG.LagSwitchForce + math.random(-8, 8)
+	-- 2. Заморозка на lagDuration
+	root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+	root.Anchored = true
 
-	-- Вертикальная составляющая если наклонная поверхность
-	local vertBoost = 0
-	if hit then
-		local sAngle = math.deg(math.acos(math.clamp(
-			hit.Normal:Dot(Vector3.new(0,1,0)), -1, 1)))
-		if sAngle >= 5 and sAngle <= 89 then
-			vertBoost = force * math.sin(math.rad(sAngle)) * 0.4
-		end
-	end
+	local lagDuration = CONFIG.LagSwitchForce / 60  -- 0.5–2.0 сек в зависимости от силы
+	lagDuration = math.clamp(lagDuration, 0.3, 2.0)
+	task.wait(lagDuration)
 
-	root.AssemblyLinearVelocity = Vector3.new(
-		dashDir.X * force,
-		math.max(root.AssemblyLinearVelocity.Y, vertBoost),
-		dashDir.Z * force)
+	-- 3. Телепорт вперёд + вверх
+	local targetPos = root.Position + (direction * 10) + Vector3.new(0, 20, 0)
+	root.CFrame = CFrame.new(targetPos, targetPos + direction)
+
+	root.Anchored = false
+
+	-- 4. Импульс
+	local boost = math.clamp(speed / 50, 1.0, 3.0)
+	root.AssemblyLinearVelocity = (direction * (100 * boost)) + Vector3.new(0, 60, 0)
 	hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+	-- 5. Убираем анти-гравитацию через 2 сек
+	task.delay(2, function()
+		pcall(function() vf:Destroy(); attachment:Destroy() end)
+		_lagSwitchActive = false
+	end)
 end
 
 -- Infinite Jump
